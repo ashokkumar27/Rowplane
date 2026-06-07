@@ -546,6 +546,16 @@ Workers include registered tool contracts in the prompt state as `registered_too
 
 Do not put tool execution in the model client. The model proposes. The worker and Postgres govern.
 
+If your app already uses the OpenAI Agents SDK, use the command bridge instead of exposing Rowplane side effects as framework tools:
+
+```python
+from rowplane.adapters import OpenAIAgentsCommandClient
+
+model = OpenAIAgentsCommandClient(model="gpt-5.4-mini")
+```
+
+That lets the Agent choose the next intended action while Rowplane still owns validation, approval, idempotency, event writes, and tool execution.
+
 ## Common Patterns
 
 Use `harness.set_budget(...)` first:

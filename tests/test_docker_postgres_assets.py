@@ -48,10 +48,15 @@ class DockerPostgresAssetsTests(unittest.TestCase):
         self.assertIn("docs/SCALING.md", readme)
         self.assertIn("docs/TUTORIAL.md", starter)
         self.assertIn("docs/REFERENCE.md", starter)
+        adapter_example = (ROOT / "examples" / "adapters" / "README.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("drain_leased_work", support_starter)
         self.assertIn("approval", support_starter)
         self.assertIn("--live", support_starter)
         self.assertIn("--max-output-tokens 2400", support_starter)
+        self.assertIn("OpenAI Agents", adapter_example)
+        self.assertIn("command", adapter_example)
 
     def test_compose_defines_postgres_and_real_use_case_runner(self) -> None:
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")

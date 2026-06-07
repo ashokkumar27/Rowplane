@@ -92,11 +92,22 @@ model = OpenAIModelClient(
 
 Install it with `pip install -e '.[openai]'`. The OpenAI SDK is imported only when no custom `client` is injected, so tests and non-OpenAI deployments do not need the dependency.
 
+Optional OpenAI Agents SDK bridge:
+
+```python
+from rowplane.adapters import OpenAIAgentsCommandClient
+
+model = OpenAIAgentsCommandClient(model="gpt-5.4-mini")
+```
+
+Install it with `pip install -e '.[openai-agents]'`. The bridge uses Agents as a command proposer only; Rowplane still validates and executes tools through Postgres governance.
+
 Common methods:
 
 ```text
 AgentHarness(database_url, tenant_id=..., model_client=...)
 OpenAIModelClient(model='gpt-5', max_output_tokens=..., estimated_call_cost_usd=..., input_cost_per_million=..., output_cost_per_million=..., request_options=...)
+OpenAIAgentsCommandClient(model='gpt-5.4-mini', agent=..., runner=..., run_config=..., max_turns=...)
 AgentHarness.from_connection(conn, tenant_id=..., model_client=..., registry=...)
 harness.migrate()
 harness.register_tool(handler)

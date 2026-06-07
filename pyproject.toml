@@ -16,6 +16,9 @@ dev = [
 openai = [
   "openai>=1.0",
 ]
+openai-agents = [
+  "openai-agents>=0.14.0",
+]
 
 [project.scripts]
 rowplane = "pg_agent.cli:main"

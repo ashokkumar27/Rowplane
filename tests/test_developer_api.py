@@ -31,15 +31,18 @@ class RowplaneImportCompatibilityTests(unittest.TestCase):
 
     def test_rowplane_and_legacy_pg_agent_imports_are_supported(self) -> None:
         from rowplane import AgentHarness as RowplaneHarness, tool as rowplane_tool
+        from rowplane.adapters import OpenAIAgentsCommandClient as RowplaneOpenAIAgentsCommandClient
         from rowplane.adapters import OpenAIModelClient as RowplaneOpenAIModelClient
         from rowplane.runtime.errors import MalformedCommand as RowplaneMalformedCommand
         from pg_agent import AgentHarness as LegacyHarness, tool as legacy_tool
+        from pg_agent.adapters import OpenAIAgentsCommandClient as LegacyOpenAIAgentsCommandClient
         from pg_agent.adapters import OpenAIModelClient as LegacyOpenAIModelClient
         from pg_agent.runtime.errors import MalformedCommand as LegacyMalformedCommand
 
         self.assertIs(RowplaneHarness, LegacyHarness)
         self.assertIs(rowplane_tool, legacy_tool)
         self.assertIs(RowplaneOpenAIModelClient, LegacyOpenAIModelClient)
+        self.assertIs(RowplaneOpenAIAgentsCommandClient, LegacyOpenAIAgentsCommandClient)
         self.assertIs(RowplaneMalformedCommand, LegacyMalformedCommand)
 
     def test_legacy_cli_help_uses_legacy_program_name(self) -> None:

@@ -200,6 +200,20 @@ model = OpenAIModelClient(
 
 The adapter only supplies model text. Rowplane still parses one command and Postgres still validates permissions, schemas, approvals, budgets, idempotency, and state transitions.
 
+For the OpenAI Agents SDK command bridge:
+
+```bash
+.venv/bin/python -m pip install -e '.[openai-agents]'
+```
+
+```python
+from rowplane.adapters import OpenAIAgentsCommandClient
+
+model = OpenAIAgentsCommandClient(model="gpt-5.4-mini")
+```
+
+The Agents SDK is used as a planner only. It returns one Rowplane command; Rowplane still governs tool execution.
+
 ## CLI
 
 New projects should use `rowplane`, `rowplane` imports, and `ROWPLANE_DATABASE_URL`.
