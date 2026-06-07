@@ -2,7 +2,7 @@
 
 This file parks the current scalability assessment for future implementation and benchmarking.
 
-Rowplane is designed to scale horizontally by keeping workers stateless and making Postgres the control plane for leases, state transitions, budgets, approvals, idempotency, queues, and events. Many agents and users can share the same runtime because work is claimed through database-owned leases instead of in-memory worker coordination.
+Rowplane is designed to scale horizontally by keeping workers stateless and making Postgres the control plane for leases, state transitions, budgets, approvals, idempotency, queues, and events. Many agents and users can share the same runtime because work is claimed via database-owned leases instead of in-memory worker coordination.
 
 The current posture is:
 
