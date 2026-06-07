@@ -40,11 +40,18 @@ class DockerPostgresAssetsTests(unittest.TestCase):
         starter = (ROOT / "examples" / "starters" / "refund_agent" / "README.md").read_text(
             encoding="utf-8"
         )
+        support_starter = (ROOT / "examples" / "starters" / "customer_support_agent" / "README.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("docs/TUTORIAL.md", readme)
         self.assertIn("docs/REFERENCE.md", readme)
         self.assertIn("docs/SCALING.md", readme)
         self.assertIn("docs/TUTORIAL.md", starter)
         self.assertIn("docs/REFERENCE.md", starter)
+        self.assertIn("drain_leased_work", support_starter)
+        self.assertIn("approval", support_starter)
+        self.assertIn("--live", support_starter)
+        self.assertIn("--max-output-tokens 2400", support_starter)
 
     def test_compose_defines_postgres_and_real_use_case_runner(self) -> None:
         compose = (ROOT / "docker-compose.yml").read_text(encoding="utf-8")

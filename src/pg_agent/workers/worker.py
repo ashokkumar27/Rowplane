@@ -21,6 +21,7 @@ from pg_agent.runtime.errors import (
     MalformedCommand,
     MaxIterationsExceeded,
     RunStatusConflict,
+    ToolValidationError,
 )
 from pg_agent.runtime.final_contract import extract_answer_contract, validate_final_answer
 from pg_agent.runtime.prompt import build_agent_prompt
@@ -206,7 +207,9 @@ class AgentWorker:
         model_name = str(run.get("model", "unset"))
         model_started_at = monotonic()
         try:
-            raw_command = self.model_client.complete(build_agent_prompt(run, events))
+            raw_command = self.model_client.complete(
+                build_agent_prompt(run, events, self.tool_executor.registry.prompt_contracts())
+            )
         except Exception as exc:
             complete_model_call(
                 self.repository,
@@ -333,6 +336,18 @@ class AgentWorker:
         if isinstance(command, ToolCommand):
             try:
                 outcome = self.tool_executor.execute(run, command)
+            except ToolValidationError as exc:
+                self.repository.append_event(
+                    tenant_id,
+                    run_id,
+                    "tool_command_correction_requested",
+                    {"code": exc.code, "error": str(exc), "tool_name": command.tool_name},
+                )
+                self.repository.update_run_status(run_id, "thinking", "needs_tool")
+                self.repository.update_run_status(run_id, "needs_tool", "tool_running")
+                self.repository.update_run_status(run_id, "tool_running", "queued")
+                self.repository.queue_run(tenant_id, run_id)
+                return "queued"
             except AgentError as exc:
                 fail_run_for_tool_error(self.repository, run, exc)
                 return "failed"

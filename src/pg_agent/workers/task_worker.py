@@ -20,6 +20,7 @@ from pg_agent.runtime.errors import (
     AgentError,
     MalformedCommand,
     RunStatusConflict,
+    ToolValidationError,
 )
 from pg_agent.runtime.final_contract import extract_answer_contract, extract_answer_contract_from_payload, validate_final_answer
 from pg_agent.runtime.prompt import build_agent_task_prompt
@@ -278,7 +279,14 @@ class AgentTaskWorker:
         model_started_at = monotonic()
         try:
             raw_command = self.model_client.complete(
-                build_agent_task_prompt(run, task, agent, events, messages)
+                build_agent_task_prompt(
+                    run,
+                    task,
+                    agent,
+                    events,
+                    messages,
+                    self.tool_executor.registry.prompt_contracts(),
+                )
             )
         except Exception as exc:
             complete_model_call(
@@ -403,6 +411,24 @@ class AgentTaskWorker:
         if isinstance(command, ToolCommand):
             try:
                 outcome = self.tool_executor.execute(run, task, agent, command)
+            except ToolValidationError as exc:
+                self.repository.append_event(
+                    tenant_id,
+                    run_id,
+                    "tool_command_correction_requested",
+                    {
+                        "task_id": task_id,
+                        "agent_id": agent_id,
+                        "code": exc.code,
+                        "error": str(exc),
+                        "tool_name": command.tool_name,
+                    },
+                )
+                self.repository.update_task_status(task_id, "thinking", "needs_tool")
+                self.repository.update_task_status(task_id, "needs_tool", "tool_running")
+                self.repository.update_task_status(task_id, "tool_running", "queued")
+                self.repository.queue_task(tenant_id, run_id, task_id)
+                return "queued"
             except AgentError as exc:
                 self.repository.append_event(
                     tenant_id,

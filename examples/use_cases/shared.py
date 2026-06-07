@@ -41,10 +41,12 @@ class PostgresSuiteResult:
 
 
 _REFUND_CALLS_BY_KEY: dict[str, int] = {}
+_CASE_UPDATES_BY_KEY: dict[str, int] = {}
 
 
 def reset_sample_side_effect_state() -> None:
     _REFUND_CALLS_BY_KEY.clear()
+    _CASE_UPDATES_BY_KEY.clear()
 
 
 @tool(
@@ -164,12 +166,87 @@ def create_support_ticket(context: Any, arguments: Mapping[str, Any]) -> Mapping
     }
 
 
+@tool(
+    input_schema={
+        "type": "object",
+        "required": ["customer_id"],
+        "properties": {
+            "customer_id": {"type": "string"},
+            "include_recent_cases": {"type": "boolean"},
+        },
+        "additionalProperties": False,
+    },
+    description="Look up customer context needed for support triage.",
+)
+def lookup_customer_context(context: Any, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+    customer_id = str(arguments["customer_id"])
+    profiles = {
+        "cust_789": {
+            "customer_id": "cust_789",
+            "tier": "enterprise",
+            "account_health": "at_risk",
+            "recent_cases": [
+                {"case_id": "case_8701", "topic": "billing", "status": "resolved"},
+                {"case_id": "case_8814", "topic": "invoice", "status": "closed"},
+            ],
+            "eligible_refund_cents": 4500,
+            "risk_flags": ["duplicate_billing", "retention_risk"],
+        }
+    }
+    profile = profiles.get(
+        customer_id,
+        {
+            "customer_id": customer_id,
+            "tier": "standard",
+            "account_health": "normal",
+            "recent_cases": [],
+            "eligible_refund_cents": 0,
+            "risk_flags": [],
+        },
+    )
+    if not arguments.get("include_recent_cases", False):
+        profile = dict(profile)
+        profile["recent_cases"] = []
+    return profile
+
+
+@tool(
+    input_schema={
+        "type": "object",
+        "required": ["case_id", "customer_id", "status", "resolution_summary"],
+        "properties": {
+            "case_id": {"type": "string"},
+            "customer_id": {"type": "string"},
+            "status": {"type": "string", "enum": ["open", "pending", "resolved", "escalated"]},
+            "resolution_summary": {"type": "string"},
+            "tags": {"type": "array", "items": {"type": "string"}},
+        },
+        "additionalProperties": False,
+    },
+    is_side_effecting=True,
+    description="Update a customer support case after governed actions complete.",
+)
+def update_customer_case(context: Any, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+    _CASE_UPDATES_BY_KEY[context.idempotency_key] = _CASE_UPDATES_BY_KEY.get(context.idempotency_key, 0) + 1
+    return {
+        "case_update_id": f"case_update_{context.idempotency_key[:10]}",
+        "case_id": arguments["case_id"],
+        "customer_id": arguments["customer_id"],
+        "status": arguments["status"],
+        "resolution_summary": arguments["resolution_summary"],
+        "tags": list(arguments.get("tags", [])),
+        "handler_call_count": _CASE_UPDATES_BY_KEY[context.idempotency_key],
+    }
+
+
 SAMPLE_TOOL_HANDLERS = (
     search_policy_documents,
     issue_refund,
     export_customer_data,
     rollback_deployment,
     create_support_ticket,
+    lookup_customer_context,
+    update_customer_case,
 )
 
 
@@ -494,6 +571,84 @@ def _score_trajectory_debug(conn: Any, repo: PostgresRepository, run_id: str) ->
         "model_accounting": float(
             "model_call_reserved" in event_types and "model_call_completed" in event_types
         ),
+    }
+
+
+def _score_customer_support_resolution(repo: PostgresRepository, run_id: str) -> dict[str, Any]:
+    run = repo.load_run(run_id) or {}
+    answer = run.get("answer") or {}
+    events = repo.load_events(run_id, limit=800)
+    event_types = [str(event["event_type"]) for event in events]
+    executions = repo.list_tool_executions(run_id)
+    completed = [item for item in executions if item["status"] == "completed"]
+    completed_tool_names = {str(item.get("tool_name")) for item in completed}
+    approval_index = _first_event_index(events, "approval_requested", tool_name="issue_refund")
+    refund_started_index = _first_event_index(events, "tool_started", tool_name="issue_refund")
+    refund_results = [
+        (item.get("result") or {}).get("output", {})
+        for item in completed
+        if item.get("tool_name") == "issue_refund"
+    ]
+    case_updates = [
+        (item.get("result") or {}).get("output", {})
+        for item in completed
+        if item.get("tool_name") == "update_customer_case"
+    ]
+    with repo.conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT count(*) AS count
+            FROM agent_memory
+            WHERE tenant_id = %s
+              AND source_run_id = %s
+              AND memory_type = 'case_learning'
+              AND metadata->>'domain' = 'customer_support'
+              AND metadata->>'case_id' = 'case_9001'
+            """,
+            [TENANT_ID, run_id],
+        )
+        memory_count = int(cur.fetchone()["count"])
+    required_tools = {
+        "lookup_customer_context",
+        "search_policy_documents",
+        "issue_refund",
+        "create_support_ticket",
+        "update_customer_case",
+    }
+    return {
+        "correctness": float(
+            run.get("status") == "completed"
+            and answer.get("status") == "resolved_with_refund"
+            and answer.get("customer_id") == "cust_789"
+        ),
+        "tool_correctness": float(
+            required_tools.issubset(completed_tool_names)
+            and bool(refund_results)
+            and refund_results[0].get("handler_call_count") == 1
+            and bool(case_updates)
+            and case_updates[0].get("handler_call_count") == 1
+        ),
+        "retrieval_relevance": float("search_policy_documents" in completed_tool_names),
+        "format_compliance": float(
+            answer.get("refund_status") == "issued"
+            and answer.get("ticket_status") == "open"
+            and answer.get("case_id") == "case_9001"
+            and answer.get("next_step") == "retention_follow_up"
+        ),
+        "policy_compliance": float(
+            approval_index is not None
+            and refund_started_index is not None
+            and approval_index < refund_started_index
+            and "tool_permission_denied" not in event_types
+            and memory_count == 1
+        ),
+        "model_accounting": float(
+            "model_call_reserved" in event_types and "model_call_completed" in event_types
+        ),
+        "notes": [
+            "Leased worker path exercised through work_claimed/work_completed events.",
+            "Support-side effects are idempotent and stored in tool_executions.",
+        ],
     }
 
 

@@ -245,7 +245,7 @@ Run the Postgres use cases:
 docker compose up --build postgres-use-cases
 ```
 
-The showcase covers retrieval, approvals, memory, permission denial, multi-agent delegation, SQL schema guardrails, SRE rollback, state-diff evals, tenant isolation, final-answer contracts, and trajectory replay.
+The showcase covers retrieval, approvals, memory, permission denial, multi-agent delegation, SQL schema guardrails, SRE rollback, state-diff evals, customer support resolution with leased workers, tenant isolation, final-answer contracts, and trajectory replay.
 
 ## Management Console
 

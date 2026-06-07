@@ -542,6 +542,8 @@ model = OpenAIModelClient(
 
 A custom model client still only needs a `complete(messages)` method, plus optional `estimated_call_cost_usd` and `last_usage` fields for budget and token accounting. The returned text must parse to exactly one command. The worker rejects malformed commands and writes `llm_command_rejected`.
 
+Workers include registered tool contracts in the prompt state as `registered_tools`. That helps a live model produce exact tool arguments, but it does not weaken governance: invalid tool commands are rejected by Postgres, logged, and requeued for correction instead of failing the run immediately.
+
 Do not put tool execution in the model client. The model proposes. The worker and Postgres govern.
 
 ## Common Patterns
@@ -644,6 +646,7 @@ Study:
 - `examples/use_cases/sql_schema_guardrail.py`: SQL-enforced schemas.
 - `examples/use_cases/final_answer_contract.py`: final-answer validation.
 - `examples/use_cases/multi_agent_refund_review.py`: Postgres-native delegation.
+- `examples/use_cases/customer_support_resolution.py`: realistic support workflow with leased workers, approval, memory, and evals.
 - `examples/use_cases/trajectory_replay_debug.py`: replay/debug flow.
 - `docs/REFERENCE.md`: compact API, CLI, SQL runtime, management API, and examples reference.
 

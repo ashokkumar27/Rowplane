@@ -51,6 +51,20 @@ WITH tenant AS (
       '{"type":"object","required":["customer_id","title","severity"],"properties":{"customer_id":{"type":"string"},"title":{"type":"string"},"severity":{"type":"string","enum":["low","medium","high"]}},"additionalProperties":false}',
       true,
       false
+    ),
+    (
+      'lookup_customer_context',
+      'Look up customer context needed for support triage.',
+      '{"type":"object","required":["customer_id"],"properties":{"customer_id":{"type":"string"},"include_recent_cases":{"type":"boolean"}},"additionalProperties":false}',
+      false,
+      false
+    ),
+    (
+      'update_customer_case',
+      'Update a customer support case after governed actions complete.',
+      '{"type":"object","required":["case_id","customer_id","status","resolution_summary"],"properties":{"case_id":{"type":"string"},"customer_id":{"type":"string"},"status":{"type":"string","enum":["open","pending","resolved","escalated"]},"resolution_summary":{"type":"string"},"tags":{"type":"array","items":{"type":"string"}}},"additionalProperties":false}',
+      true,
+      false
     )
   ) AS tools(name, description, input_schema, is_side_effecting, requires_approval)
   ON CONFLICT (tenant_id, name) DO UPDATE SET
@@ -64,7 +78,7 @@ WITH tenant AS (
 INSERT INTO agent_tool_permissions (tenant_id, tool_id, subject_type, subject_id, allowed)
 SELECT tenant_id, id, 'tenant', tenant_id::text, true
 FROM upsert_tools
-WHERE name IN ('search_policy_documents', 'issue_refund', 'rollback_deployment', 'create_support_ticket')
+WHERE name IN ('search_policy_documents', 'issue_refund', 'rollback_deployment', 'create_support_ticket', 'lookup_customer_context', 'update_customer_case')
 ON CONFLICT (tenant_id, tool_id, subject_type, subject_id) DO UPDATE SET allowed = EXCLUDED.allowed;
 
 INSERT INTO agents (tenant_id, name, role, instructions, model, enabled)
@@ -138,7 +152,15 @@ FROM (VALUES
   ('refund_operator', 'rollback_deployment', false),
   ('refund_operator', 'create_support_ticket', false),
   ('critic', 'rollback_deployment', false),
-  ('critic', 'create_support_ticket', false)
+  ('critic', 'create_support_ticket', false),
+  ('planner', 'lookup_customer_context', true),
+  ('planner', 'update_customer_case', true),
+  ('policy_researcher', 'lookup_customer_context', false),
+  ('policy_researcher', 'update_customer_case', false),
+  ('refund_operator', 'lookup_customer_context', false),
+  ('refund_operator', 'update_customer_case', false),
+  ('critic', 'lookup_customer_context', false),
+  ('critic', 'update_customer_case', false)
 ) AS grants(agent_name, tool_name, allowed)
 JOIN agent_rows ON agent_rows.name = grants.agent_name
 JOIN tool_rows ON tool_rows.name = grants.tool_name
@@ -201,6 +223,13 @@ VALUES
     '{"customer_id":"cust_456","issue":"SLA breach","severity":"high"}',
     '{"ticket_status":"open","severity":"high"}',
     '{"category":"state_diff","sample":true}'
+  ),
+  (
+    '00000000-0000-0000-0000-000000000123',
+    'customer_support_resolution',
+    '{"case_id":"case_9001","customer_id":"cust_789","message":"duplicate billing charge and cancellation risk"}',
+    '{"status":"resolved_with_refund","refund_status":"issued","ticket_status":"open"}',
+    '{"category":"customer_support","sample":true,"scaling":"leased_workers"}'
   ),
   (
     '00000000-0000-0000-0000-000000000123',

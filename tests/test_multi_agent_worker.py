@@ -264,6 +264,52 @@ class MultiAgentWorkerTests(unittest.TestCase):
 
 
 class TaskToolExecutorTests(unittest.TestCase):
+
+    def test_task_tool_validation_failure_requeues_for_model_correction(self) -> None:
+        repo = FakeRepository()
+        run = repo.add_run(status="queued")
+        agent = repo.add_agent("operator", agent_id="agent_operator")
+        task = repo.add_task(agent["id"], task_id="task_tool", status="queued")
+        db_tool = repo.add_tool(
+            "tenant_1",
+            "demo_tool",
+            input_schema={
+                "type": "object",
+                "required": ["x"],
+                "properties": {"x": {"type": "integer"}},
+                "additionalProperties": False,
+            },
+        )
+        repo.grant_agent("tenant_1", db_tool["id"], agent["id"])
+        registry = ToolRegistry()
+        registry.register(
+            ToolDefinition(
+                name="demo_tool",
+                handler=lambda context, arguments: {"ok": True},
+                input_schema={
+                    "type": "object",
+                    "required": ["x"],
+                    "properties": {"x": {"type": "integer"}},
+                    "additionalProperties": False,
+                },
+            )
+        )
+        worker = AgentTaskWorker(
+            repo,
+            SequenceModel([{"action": "tool", "tool_name": "demo_tool", "arguments": {"x": 1, "extra": True}}]),
+            TaskToolExecutor(repo, registry),
+        )
+
+        result = worker.process_task("task_tool")
+
+        self.assertEqual(result, "queued")
+        self.assertEqual(repo.tasks["task_tool"]["status"], "queued")
+        self.assertEqual(repo.queued_tasks, [("tenant_1", "run_1", "task_tool")])
+        event_types = [event["event_type"] for event in repo.events]
+        self.assertIn("tool_validation_failed", event_types)
+        self.assertIn("tool_command_correction_requested", event_types)
+        self.assertNotIn("task_failed", event_types)
+
     def test_task_tool_uses_agent_permission_and_task_context(self) -> None:
         repo = FakeRepository()
         run = repo.add_run(status="thinking")

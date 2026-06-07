@@ -27,6 +27,7 @@ from examples.use_cases.enterprise_state_diff_ticket import run_enterprise_state
 from examples.use_cases.tenant_boundary_search_isolation import run_tenant_boundary_search_isolation
 from examples.use_cases.trajectory_replay_debug import run_trajectory_replay_debug
 from examples.use_cases.final_answer_contract import run_final_answer_contract
+from examples.use_cases.customer_support_resolution import run_customer_support_resolution
 
 
 def run_postgres_sample_suite(database_url: str, *, reset: bool = False) -> PostgresSuiteResult:
@@ -68,6 +69,7 @@ def run_postgres_sample_suite(database_url: str, *, reset: bool = False) -> Post
             run_sql_schema_guardrail(conn, repo),
             run_sre_rollback_approval(conn, repo),
             run_enterprise_state_diff_ticket(conn, repo),
+            run_customer_support_resolution(conn, repo),
             run_tenant_boundary_search_isolation(conn, repo),
             run_trajectory_replay_debug(conn, repo),
             run_final_answer_contract(conn, repo),
@@ -144,6 +146,7 @@ def assess_harness(scenarios: Sequence[PostgresScenarioResult]) -> dict[str, Any
             "Use cases now run under a single tenant-wide budget and record model-call reservation/completion evidence.",
             "Multi-agent delegation is represented by agent_tasks and agent_messages, not an external orchestrator.",
             "Replay and search examples use app.run_trajectory_v and app.search_harness directly.",
+            "Customer support resolution shows the scalable leased-worker path for a realistic multi-step workflow.",
         ],
         "gaps": [
             "The model remains scripted for deterministic evaluation.",
@@ -163,6 +166,7 @@ def build_capability_matrix(scenarios: Sequence[PostgresScenarioResult]) -> dict
         "sql_schema_guardrail": ["sql_runtime_api", "db_schema_validation", "failure_trace"],
         "sre_rollback_approval": ["developer_api", "global_budget", "model_accounting", "sre_workflow", "approval", "idempotency", "side_effect_guard"],
         "enterprise_state_diff_ticket": ["developer_api", "global_budget", "model_accounting", "state_diff_eval", "tool_execution", "enterprise_api"],
+        "customer_support_resolution": ["developer_api", "leased_workers", "global_budget", "model_accounting", "approval", "idempotency", "memory", "support_workflow", "evals"],
         "tenant_boundary_search_isolation": ["tenant_isolation", "harness_search", "rls_context"],
         "trajectory_replay_debug": ["developer_api", "global_budget", "model_accounting", "trajectory_replay", "harness_search", "rejected_approval", "blocked_run"],
         "final_answer_contract": ["developer_api", "global_budget", "model_accounting", "answer_contract", "final_validation", "event_trace"],

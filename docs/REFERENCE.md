@@ -314,7 +314,7 @@ Run the real Postgres showcase:
 docker compose up --build postgres-use-cases
 ```
 
-It runs ten scenarios:
+It runs twelve scenarios:
 
 ```text
 policy_retrieval_qa
@@ -325,19 +325,24 @@ multi_agent_refund_review
 sql_schema_guardrail
 sre_rollback_approval
 enterprise_state_diff_ticket
+customer_support_resolution
 tenant_boundary_search_isolation
 trajectory_replay_debug
+final_answer_contract
 ```
 
 Expected assessment includes `sample_pass_rate: 1.0`. The model is scripted for deterministic tests; production still needs a real model adapter, worker supervision, deployment lifecycle, metrics, and backup/restore practices.
 
+The customer support starter can also run the same Postgres-governed flow with `--live --model gpt-5`. Live workers include registered tool contracts in prompt state and still rely on Postgres for schema rejection, approvals, idempotency, leases, budgets, memory, and final-answer validation.
+
 Example map:
 
 ```text
-examples/starters/refund_agent/   copyable starter
-examples/use_cases/shared.py      @tool handlers and scoring helpers
-examples/use_cases/suite.py       migration/seed/scenario orchestration
-examples/use_cases/*.py           one scenario per capability
+examples/starters/refund_agent/              copyable refund starter
+examples/starters/customer_support_agent/    copyable customer support starter
+examples/use_cases/shared.py                 @tool handlers and scoring helpers
+examples/use_cases/suite.py                  migration/seed/scenario orchestration
+examples/use_cases/*.py                      one scenario per capability
 ```
 
 ## Tests

@@ -26,6 +26,7 @@ class PostgresRealUseCasesTests(unittest.TestCase):
             "sql_schema_guardrail",
             "sre_rollback_approval",
             "enterprise_state_diff_ticket",
+            "customer_support_resolution",
             "tenant_boundary_search_isolation",
             "trajectory_replay_debug",
             "final_answer_contract",
@@ -43,6 +44,8 @@ class PostgresRealUseCasesTests(unittest.TestCase):
         self.assertIn("model_accounting", result.capability_matrix["refund_approval"])
         self.assertIn("developer_api", result.capability_matrix["enterprise_state_diff_ticket"])
         self.assertIn("state_diff_eval", result.capability_matrix["enterprise_state_diff_ticket"])
+        self.assertIn("leased_workers", result.capability_matrix["customer_support_resolution"])
+        self.assertIn("support_workflow", result.capability_matrix["customer_support_resolution"])
         self.assertIn("trajectory_replay", result.capability_matrix["trajectory_replay_debug"])
         self.assertIn("answer_contract", result.capability_matrix["final_answer_contract"])
 
@@ -51,6 +54,10 @@ class PostgresRealUseCasesTests(unittest.TestCase):
         self.assertIn("tool_validation_failed", scenarios["sql_schema_guardrail"].event_types)
         self.assertIn("approval_requested", scenarios["sre_rollback_approval"].event_types)
         self.assertIn("tool_completed", scenarios["enterprise_state_diff_ticket"].event_types)
+        self.assertIn("work_claimed", scenarios["customer_support_resolution"].event_types)
+        self.assertIn("approval_requested", scenarios["customer_support_resolution"].event_types)
+        self.assertIn("memory_recorded", scenarios["customer_support_resolution"].event_types)
+        self.assertEqual(scenarios["customer_support_resolution"].scores["policy_compliance"], 1.0)
         self.assertEqual(scenarios["tenant_boundary_search_isolation"].scores["policy_compliance"], 1.0)
         self.assertEqual(scenarios["trajectory_replay_debug"].final_status, "blocked")
         self.assertIn("final_answer_rejected", scenarios["final_answer_contract"].event_types)
@@ -62,6 +69,7 @@ class PostgresRealUseCasesTests(unittest.TestCase):
             "multi_agent_refund_review",
             "sre_rollback_approval",
             "enterprise_state_diff_ticket",
+            "customer_support_resolution",
             "trajectory_replay_debug",
             "final_answer_contract",
         }

@@ -22,12 +22,14 @@ Never include secrets in arguments, answers, metadata, or reasons."""
 def build_agent_prompt(
     run: Mapping[str, Any],
     events: Sequence[Mapping[str, Any]],
+    tool_contracts: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, str]]:
     """Build a simple chat prompt from database state."""
 
     state = {
         "run": redact_secrets(dict(run)),
         "events": [redact_secrets(dict(event)) for event in events],
+        "registered_tools": [redact_secrets(dict(tool)) for tool in (tool_contracts or [])],
         "command_contract": {
             "final": {"action": "final", "answer": {}},
             "tool": {
@@ -73,6 +75,7 @@ def build_agent_task_prompt(
     agent: Mapping[str, Any],
     events: Sequence[Mapping[str, Any]],
     messages: Sequence[Mapping[str, Any]],
+    tool_contracts: Sequence[Mapping[str, Any]] | None = None,
 ) -> list[dict[str, str]]:
     state = {
         "run": redact_secrets(dict(run)),
@@ -80,6 +83,7 @@ def build_agent_task_prompt(
         "agent": redact_secrets(dict(agent)),
         "messages": [redact_secrets(dict(message)) for message in messages],
         "events": [redact_secrets(dict(event)) for event in events],
+        "registered_tools": [redact_secrets(dict(tool)) for tool in (tool_contracts or [])],
         "command_contract": {
             "final": {"action": "final", "answer": {}},
             "tool": {

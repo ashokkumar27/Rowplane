@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import json
 import unittest
+from typing import Any, Mapping
 
 from helpers import FakeRepository, SRC, StaticModel  # noqa: F401
+from rowplane.tools.base import ToolDefinition
 from rowplane.tools.executor import ToolExecutor
 from rowplane.tools.registry import ToolRegistry
 from rowplane.workers.worker import AgentWorker
@@ -241,6 +244,85 @@ class WorkerTests(unittest.TestCase):
         self.assertEqual(repo.runs["run_1"]["status"], "queued")
         self.assertEqual(len(repo.memories), 1)
         self.assertEqual(repo.queued, [("tenant_1", "run_1")])
+
+
+    def test_prompt_includes_registered_tool_contracts(self) -> None:
+        repo = FakeRepository()
+        repo.add_run()
+        repo.add_tool("tenant_1", "lookup_customer_context")
+        registry = ToolRegistry()
+        registry.register(
+            ToolDefinition(
+                name="lookup_customer_context",
+                handler=lambda context, arguments: {"ok": True},
+                input_schema={
+                    "type": "object",
+                    "required": ["customer_id"],
+                    "properties": {"customer_id": {"type": "string"}},
+                    "additionalProperties": False,
+                },
+                is_side_effecting=False,
+                requires_approval=False,
+                description="Look up customer context.",
+            )
+        )
+        model = StaticModel({"action": "final", "answer": {"ok": True}})
+        worker = AgentWorker(repo, model, ToolExecutor(repo, registry))
+
+        result = worker.process_run("run_1")
+
+        self.assertEqual(result, "completed")
+        state = json.loads(model.messages[0][1]["content"])
+        self.assertEqual(state["registered_tools"][0]["name"], "lookup_customer_context")
+        self.assertEqual(state["registered_tools"][0]["input_schema"]["required"], ["customer_id"])
+        self.assertFalse(state["registered_tools"][0]["requires_approval"])
+
+    def test_tool_validation_failure_requeues_for_model_correction(self) -> None:
+        repo = FakeRepository()
+        repo.add_run()
+        db_tool = repo.add_tool(
+            "tenant_1",
+            "demo_tool",
+            input_schema={
+                "type": "object",
+                "required": ["x"],
+                "properties": {"x": {"type": "integer"}},
+                "additionalProperties": False,
+            },
+        )
+        repo.grant_tenant("tenant_1", db_tool["id"])
+        registry = ToolRegistry()
+
+        def handler(context: Any, arguments: Mapping[str, Any]) -> Mapping[str, Any]:
+            return {"ok": True}
+
+        registry.register(
+            ToolDefinition(
+                name="demo_tool",
+                handler=handler,
+                input_schema={
+                    "type": "object",
+                    "required": ["x"],
+                    "properties": {"x": {"type": "integer"}},
+                    "additionalProperties": False,
+                },
+            )
+        )
+        worker = AgentWorker(
+            repo,
+            StaticModel({"action": "tool", "tool_name": "demo_tool", "arguments": {"x": 1, "extra": True}}),
+            ToolExecutor(repo, registry),
+        )
+
+        result = worker.process_run("run_1")
+
+        self.assertEqual(result, "queued")
+        self.assertEqual(repo.runs["run_1"]["status"], "queued")
+        self.assertEqual(repo.queued, [("tenant_1", "run_1")])
+        event_types = [event["event_type"] for event in repo.events]
+        self.assertIn("tool_validation_failed", event_types)
+        self.assertIn("tool_command_correction_requested", event_types)
+        self.assertNotIn("run_failed", event_types)
 
     def test_max_iterations_blocks_before_model_call(self) -> None:
         repo = FakeRepository()
