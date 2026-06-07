@@ -1,0 +1,8 @@
+# Optional exploratory smoke wrappers only.
+# These are not required for the default Postgres-native control-plane benchmark.
+langchain>=1.0
+langgraph>=1.0
+crewai>=0.150
+pydantic-ai>=0.7
+openai-agents>=0.2
+llama-index>=0.12

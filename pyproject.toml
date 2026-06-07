@@ -1,0 +1,32 @@
+[project]
+name = "rowplane"
+version = "0.1.0"
+description = "Rowplane: a Postgres-native control plane for governed AI agents."
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115",
+  "psycopg[binary]>=3.1",
+  "uvicorn[standard]>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.27",
+]
+openai = [
+  "openai>=1.0",
+]
+
+[project.scripts]
+rowplane = "pg_agent.cli:main"
+pg-agent = "pg_agent.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"pg_agent.management" = ["static/*"]

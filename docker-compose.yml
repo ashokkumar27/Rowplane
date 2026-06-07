@@ -1,0 +1,45 @@
+services:
+  postgres:
+    build:
+      context: .
+      dockerfile: docker/postgres/Dockerfile
+    environment:
+      POSTGRES_DB: rowplane
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d rowplane"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+    volumes:
+      - rowplane_postgres_data:/var/lib/postgresql/data
+
+  postgres-use-cases:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rowplane
+    command: ["python", "-B", "examples/postgres_showcase.py", "--reset"]
+
+  management-api:
+    build:
+      context: .
+      dockerfile: docker/app/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/rowplane
+    ports:
+      - "8000:8000"
+    command: ["uvicorn", "rowplane.management.api:app", "--host", "0.0.0.0", "--port", "8000"]
+
+volumes:
+  rowplane_postgres_data:

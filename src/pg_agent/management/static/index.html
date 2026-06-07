@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Rowplane Console</title>
+  <link rel="stylesheet" href="/console/assets/styles.css">
+  <script defer src="/console/assets/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">RP</div>
+        <div>
+          <h1>Rowplane Console</h1>
+          <p>Governed agent operations</p>
+        </div>
+      </div>
+
+      <div class="top-status" aria-label="Console status">
+        <span id="connectionState" class="health-chip muted">Connecting</span>
+        <span id="lastRefresh" class="top-meta">Not refreshed</span>
+        <span id="currentTenantLabel" class="top-meta mono">tenant pending</span>
+      </div>
+
+      <div class="top-actions">
+        <label class="field compact tenant-field">
+          <span>Tenant</span>
+          <input id="tenantId" type="text" autocomplete="off" spellcheck="false" value="00000000-0000-0000-0000-000000000123">
+        </label>
+        <label class="field compact actor-field">
+          <span>Actor</span>
+          <input id="actorId" type="text" autocomplete="off" spellcheck="false" value="console_admin">
+        </label>
+        <button id="refreshButton" class="button primary" type="button" title="Refresh current view">Refresh</button>
+      </div>
+    </header>
+
+    <div class="workspace">
+      <nav class="sidebar" aria-label="Management sections">
+        <div class="nav-section-label">Operate</div>
+        <button class="nav-button active" type="button" data-view="overview"><span>Overview</span></button>
+        <button class="nav-button" type="button" data-view="approvals"><span>Approvals</span><span id="approvalNavBadge" class="nav-badge">0</span></button>
+        <button class="nav-button" type="button" data-view="runs"><span>Runs</span><span id="runNavBadge" class="nav-badge">0</span></button>
+        <button class="nav-button" type="button" data-view="tools"><span>Tools</span></button>
+        <button class="nav-button" type="button" data-view="agents"><span>Agents</span></button>
+        <div class="nav-section-label">Assure</div>
+        <button class="nav-button" type="button" data-view="evals"><span>Evals</span></button>
+        <button class="nav-button" type="button" data-view="audit"><span>Audit</span></button>
+        <button class="nav-button" type="button" data-view="memory"><span>Memory</span></button>
+      </nav>
+
+      <main class="content">
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+        <section id="view-overview" class="view active" data-view="overview">
+          <div class="section-header">
+            <div>
+              <h2>Overview</h2>
+              <p id="overviewUpdated">Waiting for data</p>
+            </div>
+          </div>
+          <div id="attentionStrip" class="attention-strip"></div>
+          <div id="metricGrid" class="metric-grid"></div>
+          <div class="dashboard-grid">
+            <section class="panel">
+              <div class="panel-header">
+                <h3>Run States</h3>
+              </div>
+              <div id="runStateList" class="status-list"></div>
+            </section>
+            <section class="panel">
+              <div class="panel-header">
+                <h3>Task States</h3>
+              </div>
+              <div id="taskStateList" class="status-list"></div>
+            </section>
+            <section class="panel wide">
+              <div class="panel-header">
+                <h3>Recent Events</h3>
+              </div>
+              <div id="recentEvents" class="event-list"></div>
+            </section>
+          </div>
+        </section>
+
+        <section id="view-approvals" class="view" data-view="approvals">
+          <div class="section-header">
+            <div>
+              <h2>Approvals</h2>
+              <p id="approvalCount">0 requests</p>
+            </div>
+            <div class="filters">
+              <label class="field inline">
+                <span>Status</span>
+                <select id="approvalStatus">
+                  <option value="pending">Pending</option>
+                  <option value="all">All</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="split-view">
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Request</th>
+                      <th>Status</th>
+                      <th>Run</th>
+                      <th>Age</th>
+                      <th>Decision</th>
+                    </tr>
+                  </thead>
+                  <tbody id="approvalRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <aside id="approvalDetail" class="detail-panel"></aside>
+          </div>
+        </section>
+
+        <section id="view-runs" class="view" data-view="runs">
+          <div class="section-header">
+            <div>
+              <h2>Runs</h2>
+              <p id="runCount">0 runs</p>
+            </div>
+            <div class="filters">
+              <label class="field inline">
+                <span>Status</span>
+                <select id="runStatus">
+                  <option value="">All statuses</option>
+                  <option value="queued">Queued</option>
+                  <option value="thinking">Thinking</option>
+                  <option value="needs_tool">Needs tool</option>
+                  <option value="tool_running">Tool running</option>
+                  <option value="waiting_approval">Waiting approval</option>
+                  <option value="evaluating">Evaluating</option>
+                  <option value="completed">Completed</option>
+                  <option value="failed">Failed</option>
+                  <option value="blocked">Blocked</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div class="split-view">
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Run</th>
+                      <th>Status</th>
+                      <th>Model</th>
+                      <th>Work</th>
+                      <th>Approvals</th>
+                      <th>Latest Event</th>
+                    </tr>
+                  </thead>
+                  <tbody id="runRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <aside id="runDetail" class="detail-panel"></aside>
+          </div>
+        </section>
+
+        <section id="view-tools" class="view" data-view="tools">
+          <div class="section-header">
+            <div>
+              <h2>Tools</h2>
+              <p id="toolCount">0 tools</p>
+            </div>
+          </div>
+          <section class="panel table-panel full">
+            <div class="table-wrap">
+              <table class="tools-table">
+                <thead>
+                  <tr>
+                    <th>Tool</th>
+                    <th>Enabled</th>
+                    <th>Approval</th>
+                    <th>Risk</th>
+                    <th>Executions</th>
+                    <th>Failures</th>
+                    <th>Description</th>
+                    <th>Save</th>
+                  </tr>
+                </thead>
+                <tbody id="toolRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="view-agents" class="view" data-view="agents">
+          <div class="section-header">
+            <div>
+              <h2>Agents</h2>
+              <p id="agentCount">0 agents</p>
+            </div>
+          </div>
+          <div class="split-view">
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Agent</th>
+                      <th>Role</th>
+                      <th>Status</th>
+                      <th>Tasks</th>
+                      <th>Blocked</th>
+                    </tr>
+                  </thead>
+                  <tbody id="agentRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <aside id="agentDetail" class="detail-panel"></aside>
+          </div>
+        </section>
+
+        <section id="view-evals" class="view" data-view="evals">
+          <div class="section-header">
+            <div>
+              <h2>Evals</h2>
+              <p id="evalCount">0 eval cases</p>
+            </div>
+          </div>
+          <div class="split-view">
+            <section class="panel table-panel">
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Case</th>
+                      <th>Results</th>
+                      <th>Correct</th>
+                      <th>Tools</th>
+                      <th>Policy</th>
+                      <th>Latest</th>
+                    </tr>
+                  </thead>
+                  <tbody id="evalRows"></tbody>
+                </table>
+              </div>
+            </section>
+            <aside id="evalDetail" class="detail-panel"></aside>
+          </div>
+        </section>
+
+        <section id="view-audit" class="view" data-view="audit">
+          <div class="section-header">
+            <div>
+              <h2>Audit</h2>
+              <p id="auditCount">0 events</p>
+            </div>
+            <div class="filters audit-filters">
+              <label class="field inline">
+                <span>Type</span>
+                <input id="auditType" type="text" autocomplete="off" spellcheck="false" placeholder="event_type">
+              </label>
+              <label class="field inline">
+                <span>Actor</span>
+                <input id="auditActor" type="text" autocomplete="off" spellcheck="false" placeholder="actor">
+              </label>
+            </div>
+          </div>
+          <section class="panel table-panel full">
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Time</th>
+                    <th>Source</th>
+                    <th>Type</th>
+                    <th>Actor</th>
+                    <th>Run</th>
+                    <th>Payload</th>
+                  </tr>
+                </thead>
+                <tbody id="auditRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section id="view-memory" class="view" data-view="memory">
+          <div class="section-header">
+            <div>
+              <h2>Memory</h2>
+              <p id="memoryCount">0 memories</p>
+            </div>
+            <div class="filters">
+              <label class="field inline">
+                <span>Type</span>
+                <input id="memoryType" type="text" autocomplete="off" spellcheck="false" placeholder="memory_type">
+              </label>
+            </div>
+          </div>
+          <section id="memoryList" class="memory-list"></section>
+        </section>
+      </main>
+    </div>
+  </div>
+</body>
+</html>
