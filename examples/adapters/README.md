@@ -19,3 +19,13 @@ OPENAI_API_KEY=... \
 ```
 
 The example defaults to `gpt-5.4-mini` and requires `pip install -e '.[openai-agents]'`.
+
+## LangGraph And Deep Agents Intent Bridges
+
+The LangGraph and Deep Agents adapters are planner-only intent wrappers:
+
+```text
+framework planner -> one Rowplane intent -> Rowplane decision -> internal command -> governed execution
+```
+
+Do not bind Rowplane tools into LangGraph `ToolNode` or Deep Agents tools. The wrappers reject framework-native tool calls and return only one `RowplaneIntent` per worker iteration. Rowplane decides permissions, schema validity, approvals, idempotency, event writes, and execution.

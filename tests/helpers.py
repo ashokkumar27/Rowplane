@@ -10,9 +10,12 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from rowplane.runtime.errors import ApprovalAlreadyResolved, RunStatusConflict
+from rowplane.runtime.errors import ApprovalAlreadyResolved, RunStatusConflict, ToolValidationError
+from rowplane.runtime.sanitize import stable_hash
+from rowplane.runtime.schema import validate_json_schema_subset
 from rowplane.runtime.states import validate_transition
 from rowplane.runtime.task_states import validate_task_transition
+from rowplane.tools.executor import _approval_policy_requires_approval
 
 
 class FakeRepository:
@@ -991,6 +994,68 @@ class FakeRepository:
                 return self.permissions[agent_key]
         tenant_key = (tenant_id, tool_id, "tenant", tenant_id)
         return bool(self.permissions.get(tenant_key, False))
+
+    def simulate_agent_intent_policy(
+        self,
+        tenant_id: str,
+        run_id: str,
+        intent: Mapping[str, Any],
+        *,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        actor: str = "worker",
+    ) -> Mapping[str, Any]:
+        intent_name = str(intent.get("intent", ""))
+        run = self.runs.get(run_id)
+        if run is None:
+            return {"decision": "blocked", "status": "failed", "reason": "run_not_found"}
+        if run["status"] in {"completed", "failed"}:
+            return {"decision": "terminal", "status": run["status"]}
+        if run["status"] == "blocked":
+            return {"decision": "blocked", "status": "blocked"}
+        if intent_name in {"final_answer", "failure"}:
+            return {"decision": "terminal", "status": "allowed", "intent": intent_name}
+        if intent_name in {"clarification_request", "memory_proposal", "delegation_request"}:
+            return {"decision": "allowed", "status": "allowed", "intent": intent_name}
+        if intent_name != "tool_request":
+            return {"decision": "invalid", "status": "failed", "reason": "unsupported_intent"}
+
+        tool_name = str(intent.get("tool_name", ""))
+        arguments = intent.get("arguments") if isinstance(intent.get("arguments"), Mapping) else {}
+        db_tool = self.get_agent_tool(tenant_id, tool_name)
+        if db_tool is None or not db_tool.get("enabled", False):
+            return {"decision": "denied", "status": "failed", "reason": "not_registered_or_disabled"}
+        tool_id = str(db_tool["id"])
+        if not self.has_tool_permission(tenant_id, tool_id, run_id, agent_id=agent_id):
+            return {"decision": "denied", "status": "failed", "reason": "permission_denied", "tool_id": tool_id}
+        try:
+            validate_json_schema_subset(db_tool.get("input_schema"), arguments, subject="tool.arguments")
+        except ToolValidationError:
+            return {"decision": "invalid", "status": "failed", "reason": "tool_schema_validation_failed", "tool_id": tool_id}
+
+        arguments_hash = stable_hash(dict(arguments))
+        idempotency_key = stable_hash(
+            {
+                "tenant_id": tenant_id,
+                "run_id": run_id,
+                "tool_name": tool_name,
+                "arguments_hash": arguments_hash,
+            }
+        )
+        execution = self.get_tool_execution_by_key(tenant_id, tool_id, idempotency_key)
+        if execution is not None:
+            approval = self.get_approval_for_execution(str(execution["id"]))
+            if approval is not None and approval.get("status") == "rejected":
+                return {"decision": "blocked", "status": "blocked", "reason": "approval_rejected", "tool_execution_id": execution["id"], "approval_request_id": approval["id"]}
+            if execution.get("status") in {"completed", "failed", "running"}:
+                return {"decision": "idempotent_replay", "status": execution["status"], "tool_execution_id": execution["id"], "idempotency_key": idempotency_key}
+            if execution.get("status") == "waiting_approval" or (approval is not None and approval.get("status") == "pending"):
+                return {"decision": "requires_approval", "status": "waiting_approval", "tool_execution_id": execution["id"], "approval_request_id": approval["id"] if approval else None, "idempotency_key": idempotency_key}
+
+        requires_approval = bool(db_tool.get("requires_approval")) or _approval_policy_requires_approval(db_tool.get("approval_policy"), arguments)
+        if requires_approval:
+            return {"decision": "requires_approval", "status": "waiting_approval", "tool_id": tool_id, "idempotency_key": idempotency_key}
+        return {"decision": "allowed", "status": "running", "tool_id": tool_id, "idempotency_key": idempotency_key}
 
     def get_tool_execution_by_key(
         self,

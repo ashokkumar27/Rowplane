@@ -556,6 +556,18 @@ model = OpenAIAgentsCommandClient(model="gpt-5.4-mini")
 
 That lets the Agent choose the next intended action while Rowplane still owns validation, approval, idempotency, event writes, and tool execution.
 
+If your app uses LangGraph or Deep Agents, use the intent bridges as planner-only adapters:
+
+```python
+from rowplane.adapters import DeepAgentsIntentClient, LangGraphIntentClient
+
+model = LangGraphIntentClient(graph=compiled_graph)
+# or
+model = DeepAgentsIntentClient(agent=compiled_agent)
+```
+
+These wrappers emit `RowplaneIntent` objects. They do not expose Rowplane tools to framework-native execution, and they do not decide that approval is required. Rowplane validates the intent, records a policy decision, and maps allowed or approval-gated intents into the existing internal command path.
+
 ## Common Patterns
 
 Use `harness.set_budget(...)` first:

@@ -24,8 +24,15 @@ from pg_agent.runtime.errors import (
     ToolValidationError,
 )
 from pg_agent.runtime.final_contract import extract_answer_contract, validate_final_answer
+from pg_agent.runtime.intents import (
+    _intent_to_command,
+    intent_to_event_payload,
+    is_intent_payload,
+    normalize_intent,
+    parse_intent,
+)
 from pg_agent.runtime.prompt import build_agent_prompt
-from pg_agent.tools.executor import ToolExecutor, fail_run_for_tool_error
+from pg_agent.tools.executor import ToolExecutor, _approval_policy_requires_approval, fail_run_for_tool_error
 from pg_agent.workers.model_accounting import complete_model_call, projected_model_cost
 
 
@@ -241,15 +248,65 @@ class AgentWorker:
 
         try:
             command = parse_command(raw_command)
-        except MalformedCommand as exc:
+        except MalformedCommand as command_error:
+            if not is_intent_payload(raw_command):
+                self.repository.append_event(
+                    tenant_id,
+                    run_id,
+                    "llm_command_rejected",
+                    {"code": command_error.code, "error": str(command_error)},
+                )
+                self.repository.update_run_status(run_id, "thinking", "failed", error=str(command_error))
+                return "failed"
+            try:
+                intent = parse_intent(raw_command)
+            except MalformedCommand as intent_error:
+                self.repository.append_event(
+                    tenant_id,
+                    run_id,
+                    "llm_intent_rejected",
+                    {"code": intent_error.code, "error": str(intent_error)},
+                )
+                self.repository.update_run_status(run_id, "thinking", "failed", error=str(intent_error))
+                return "failed"
+
+            intent_payload = intent_to_event_payload(intent)
             self.repository.append_event(
                 tenant_id,
                 run_id,
-                "llm_command_rejected",
-                {"code": exc.code, "error": str(exc)},
+                "llm_intent_received",
+                intent_payload,
             )
-            self.repository.update_run_status(run_id, "thinking", "failed", error=str(exc))
-            return "failed"
+            decision = _simulate_intent_policy(
+                self.repository,
+                self.tool_executor,
+                tenant_id,
+                run_id,
+                normalize_intent(intent),
+            )
+            self.repository.append_event(
+                tenant_id,
+                run_id,
+                "intent_decision_recorded",
+                decision,
+            )
+            if str(decision.get("decision")) in {"invalid", "denied", "blocked"}:
+                reason = str(decision.get("reason", decision.get("decision", "intent_denied")))
+                self.repository.append_event(
+                    tenant_id,
+                    run_id,
+                    "llm_command_rejected",
+                    {"code": "intent_policy_denied", "error": reason, "decision": dict(decision)},
+                )
+                self.repository.update_run_status(run_id, "thinking", "failed", error=reason)
+                return "failed"
+            command = _intent_to_command(intent)
+            self.repository.append_event(
+                tenant_id,
+                run_id,
+                "intent_mapped_to_command",
+                {**intent_payload, "command_action": command.action},
+            )
 
         self.repository.append_event(
             tenant_id,
@@ -369,3 +426,36 @@ class AgentWorker:
             return "failed"
 
         raise AssertionError(f"unhandled command type: {type(command)!r}")
+
+
+def _simulate_intent_policy(
+    repository: WorkerRepository,
+    tool_executor: ToolExecutor,
+    tenant_id: str,
+    run_id: str,
+    intent: Mapping[str, Any],
+) -> Mapping[str, Any]:
+    simulator = getattr(repository, "simulate_agent_intent_policy", None)
+    if callable(simulator):
+        decision = dict(simulator(tenant_id, run_id, intent, actor="worker"))
+    else:
+        intent_name = str(intent.get("intent", ""))
+        if intent_name in {"final_answer", "failure"}:
+            decision = {"decision": "terminal", "status": "allowed", "intent": intent_name}
+        else:
+            decision = {"decision": "allowed", "status": "allowed", "intent": intent_name}
+
+    if str(intent.get("intent")) == "tool_request" and decision.get("decision") == "allowed":
+        try:
+            local_tool = tool_executor.registry.get(str(intent.get("tool_name", "")))
+        except AgentError as exc:
+            decision["decision"] = "invalid"
+            decision["status"] = "failed"
+            decision["reason"] = str(exc)
+            return decision
+        arguments = intent.get("arguments") if isinstance(intent.get("arguments"), Mapping) else {}
+        if local_tool.requires_approval or _approval_policy_requires_approval(local_tool.approval_policy, arguments):
+            decision["decision"] = "requires_approval"
+            decision["status"] = "waiting_approval"
+            decision["reason"] = "local_tool_policy_requires_approval"
+    return decision

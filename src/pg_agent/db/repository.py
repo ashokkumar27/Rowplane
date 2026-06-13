@@ -576,6 +576,46 @@ class PostgresRepository:
         )
         return self._json_result(row, "decision")
 
+    def simulate_agent_intent_policy(
+        self,
+        tenant_id: str,
+        run_id: str,
+        intent: Mapping[str, Any],
+        *,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        actor: str = "worker",
+    ) -> Mapping[str, Any]:
+        row = self._fetchone(
+            """
+            SELECT app.simulate_agent_intent_policy(
+              %s::uuid, %s::uuid, %s::uuid, %s::uuid, %s::jsonb, %s
+            ) AS decision
+            """,
+            [tenant_id, run_id, task_id, agent_id, self._json(intent), actor],
+        )
+        return self._json_result(row, "decision")
+
+    def submit_agent_intent(
+        self,
+        tenant_id: str,
+        run_id: str,
+        intent: Mapping[str, Any],
+        *,
+        task_id: str | None = None,
+        agent_id: str | None = None,
+        actor: str = "worker",
+    ) -> Mapping[str, Any]:
+        row = self._fetchone(
+            """
+            SELECT app.submit_agent_intent(
+              %s::uuid, %s::uuid, %s::uuid, %s::uuid, %s::jsonb, %s
+            ) AS decision
+            """,
+            [tenant_id, run_id, task_id, agent_id, self._json(intent), actor],
+        )
+        return self._json_result(row, "decision")
+
     def reserve_tool_execution(
         self,
         tenant_id: str,
