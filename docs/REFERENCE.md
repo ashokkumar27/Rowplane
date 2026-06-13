@@ -102,6 +102,17 @@ model = OpenAIAgentsCommandClient(model="gpt-5.4-mini")
 
 Install it with `pip install -e '.[openai-agents]'`. The bridge uses Agents as a command proposer only; Rowplane still validates and executes tools through Postgres governance.
 
+Optional LangGraph and Deep Agents intent bridges:
+
+```python
+from rowplane.adapters import DeepAgentsIntentClient, LangGraphIntentClient
+
+model = LangGraphIntentClient(graph=compiled_graph)
+model = DeepAgentsIntentClient(agent=compiled_agent)
+```
+
+Install them with `pip install -e '.[langgraph]'` or `pip install -e '.[deepagents]'`. These bridges emit one Rowplane intent per worker iteration. Framework-native tool calls are rejected; Rowplane owns the policy decision and internal command mapping.
+
 Common methods:
 
 ```text

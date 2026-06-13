@@ -35,6 +35,8 @@ Advanced: SQL runtime functions, RLS, PGMQ, replay, search, custom governance
 
 Convenience APIs must not become an orchestration framework. They are adapters over Postgres, not replacements for Postgres as the control plane.
 
+LangGraph and Deep Agents integrations are allowed only as optional planner-facing intent wrappers. They may emit one non-executing Rowplane intent per worker iteration, but they must not bind Rowplane tools, reserve executions, create approvals, write memory, queue delegation, or interpret native framework tool calls as executable actions. Rowplane decides policy outcomes and maps approved intents into its internal command path.
+
 ---
 
 ## Core Mental Model

@@ -214,6 +214,22 @@ model = OpenAIAgentsCommandClient(model="gpt-5.4-mini")
 
 The Agents SDK is used as a planner only. It returns one Rowplane command; Rowplane still governs tool execution.
 
+For LangGraph and Deep Agents planner bridges:
+
+```bash
+.venv/bin/python -m pip install -e '.[langgraph]'
+.venv/bin/python -m pip install -e '.[deepagents]'
+```
+
+```python
+from rowplane.adapters import DeepAgentsIntentClient, LangGraphIntentClient
+
+langgraph_model = LangGraphIntentClient(graph=compiled_graph)
+deepagents_model = DeepAgentsIntentClient(agent=compiled_agent)
+```
+
+These adapters return one Rowplane intent, not an executable framework action. The boundary is: intent equals external planner proposal, decision equals Rowplane policy outcome, and command equals Rowplane's internal governed execution unit. LangGraph and Deep Agents must not bind Rowplane tools, create approvals, reserve executions, write memory, queue delegation, or interpret framework-native tool calls as executable actions.
+
 ## CLI
 
 New projects should use `rowplane`, `rowplane` imports, and `ROWPLANE_DATABASE_URL`.

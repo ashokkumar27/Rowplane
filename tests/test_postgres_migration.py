@@ -70,6 +70,18 @@ class PostgresMigrationTests(unittest.TestCase):
         self.assertIn("minimum", sql)
         self.assertIn("maximum", sql)
 
+    def test_intent_migration_declares_planner_boundary(self) -> None:
+        from pathlib import Path
+
+        migration = Path(__file__).resolve().parents[1] / "db" / "migrations" / "013_agent_intents.sql"
+        sql = migration.read_text(encoding="utf-8")
+        self.assertIn("CREATE OR REPLACE FUNCTION app.validate_agent_intent", sql)
+        self.assertIn("CREATE OR REPLACE FUNCTION app.simulate_agent_intent_policy", sql)
+        self.assertIn("CREATE OR REPLACE FUNCTION app.submit_agent_intent", sql)
+        self.assertIn("llm_intent_received", sql)
+        self.assertIn("intent_decision_recorded", sql)
+        self.assertIn("intent_mapped_to_command", sql)
+
     def test_migration_applies_to_configured_postgres(self) -> None:
         import psycopg
 
